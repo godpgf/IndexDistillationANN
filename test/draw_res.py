@@ -6,8 +6,8 @@ from scipy.interpolate import UnivariateSpline
 import numpy as np
 
 DATA_PATH = "../data"
-DATASET_NAME_list = ["glove"]
-# DATASET_NAME_list = ["sift"]
+# DATASET_NAME_list = ["glove"]
+DATASET_NAME_list = ["sift"]
 
 def cal_t(dataset_name):
     # 预估每次距离计算花费的时间t
