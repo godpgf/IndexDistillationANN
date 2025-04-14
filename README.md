@@ -154,6 +154,7 @@ cd ./algorithms/vamana
 Draw a line chart of the test results.
 
 ```bash
+pip install matplotlib pandas seaborn scipy numpy
 cd ./test
 python draw_res.py
 ```

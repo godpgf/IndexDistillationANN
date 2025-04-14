@@ -123,7 +123,7 @@ def main():
         df = pd.DataFrame(data)
         sns.set_style(style='white')
         ax = sns.lineplot(x="R@10", y="qps", hue="name", style="name", markers=True, dashes=False, data=df)
-        #id += 1
+        plt.savefig('output.png', dpi=388, bbox_inches='tight')
         plt.show()
 
 
