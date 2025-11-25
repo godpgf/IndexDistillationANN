@@ -112,6 +112,19 @@ struct Mips_Point {
     return values == q.values;
   }
 
+  // 计算当前向量与输入轴的距离
+  void distance(const float* pivots, uint* order_ids, uint chunk, float* out_dist){
+    for (uint j = 0; j < chunk; ++j){
+      out_dist[j] = 0;
+    }
+    uint chunk_dim = params.dims / chunk;
+    for (uint j = 0; j < params.dims; j++){
+      uint chunk_id = j / chunk_dim;
+      uint oj = order_ids[j];
+      out_dist[chunk_id] += (pivots[oj] * values[oj]);
+    }
+  }
+
   void normalize() {
     double norm = 0.0;
     for (int j = 0; j < params.dims; j++)
@@ -389,6 +402,19 @@ struct Quantized_Mips_Point{
       }
     }
     return true;
+  }
+
+  // 计算当前向量与输入轴的距离
+  void distance(const float* pivots, uint* order_ids, uint chunk, float* out_dist){
+    for (uint j = 0; j < chunk; ++j){
+      out_dist[j] = 0;
+    }
+    uint chunk_dim = params.dims / chunk;
+    for (uint j = 0; j < params.dims; j++){
+      uint chunk_id = j / chunk_dim;
+      uint oj = order_ids[j];
+      out_dist[chunk_id] += (pivots[oj] * values[oj]);
+    }
   }
 
   void normalize() {

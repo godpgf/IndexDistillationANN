@@ -37,145 +37,336 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-namespace parlayANN {
+namespace parlayANN
+{
 
-struct PointRangeHit{
-    PointRangeHit(unsigned int num_points):n(num_points){
-        size_t* ptr = (size_t*)malloc(num_points * sizeof(size_t));
-        values = std::shared_ptr<size_t[]>(ptr, std::free);
-        clear();
-    }
+  template <class Point_, typename indexType_ = unsigned int>
+  struct PointRange
+  {
+    // using T = T_;
+    using Point = Point_;
+    using parameters = typename Point::parameters;
+    using byte = uint8_t;
+    using indexType = indexType_;
 
-    void clear(){
-        memset(values.get(), 0, n * sizeof(size_t));
-    }
+    indexType dimension() const { return params.dims; }
 
-    void hit(long i){
-         if (i > n) {
-            std::cout << "ERROR: point index out of range: " << i << " from range " << n << ", " << std::endl;
-            abort();
-        }
-        ++values.get()[i];
-    }
+    PointRange() : values(std::shared_ptr<byte[]>(nullptr, std::free)), n(0), max_cache(0), index_cache(nullptr), sid(0), eid(0) {}
 
-    size_t operator [] (long i) const {
-        return values.get()[i];
-    }
-
-    std::shared_ptr<size_t[]> values;
-    size_t n;
-};
-
-template<class Point_>
-struct PointRange{
-  //using T = T_;
-  using Point = Point_;
-  using parameters = typename Point::parameters;
-  using byte = uint8_t;
-
-  long dimension() const {return params.dims;}
-  //long aligned_dimension() const {return aligned_dims;}
-
-  PointRange() : values(std::shared_ptr<byte[]>(nullptr, std::free)), n(0) {}
-
-  template <typename PR>
-  PointRange(const PR& pr, const parameters& p) : params(p)  {
-    n = pr.size();
-    int num_bytes = p.num_bytes();
-    aligned_bytes = (num_bytes <= 32) ? 32 : 64 * ((num_bytes - 1)/64 + 1);
-    long total_bytes = n * aligned_bytes;
-    byte* ptr = (byte*) aligned_alloc(1l << 21, total_bytes);
-    madvise(ptr, total_bytes, MADV_HUGEPAGE);
-    values = std::shared_ptr<byte[]>(ptr, std::free);
-    byte* vptr = values.get();
-    parlay::parallel_for(0, n, [&] (long i) {
-      Point::translate_point(vptr + i * aligned_bytes, pr[i], params);});
-  }
-
-  template <typename PR>
-  PointRange (PR& pr) : PointRange(pr, Point::generate_parameters(pr)) { }
-
-  template <typename PR>
-  PointRange (PR& pr, int dims) : PointRange(pr, Point::generate_parameters(dims)) { }
-
-  PointRange(unsigned int num_points, unsigned int d) : n(num_points), params(parameters(d)){
-      int num_bytes = params.num_bytes();
-      aligned_bytes =  64 * ((num_bytes - 1)/64 + 1);
-      if (aligned_bytes != num_bytes)
-        std::cout << "Aligning bytes to " << aligned_bytes << std::endl;
-      long total_bytes = n * aligned_bytes;
-      byte* ptr = (byte*) aligned_alloc(1l << 21, total_bytes);
+    template <typename PR>
+    PointRange(const PR &pr, const parameters &p) : params(p)
+    {
+      n = pr.size();
+      sid = pr.sid;
+      eid = pr.eid;
+      max_cache = pr.getMaxCache();
+      index_cache = pr.getIndexCache();
+      size_t num_bytes = p.num_bytes();
+      aligned_bytes = (num_bytes <= 32) ? 32 : 64 * ((num_bytes - 1) / 64 + 1);
+      size_t total_bytes = n * aligned_bytes;
+      byte *ptr = (byte *)aligned_alloc(1l << 21, total_bytes);
       madvise(ptr, total_bytes, MADV_HUGEPAGE);
       values = std::shared_ptr<byte[]>(ptr, std::free);
-  }
+      byte *vptr = values.get();
+      parlay::parallel_for(0, n, [&](size_t i)
+                           { Point::translate_point(vptr + i * aligned_bytes, pr[i], params); });
+    }
 
-  PointRange(char* filename) : values(std::shared_ptr<byte[]>(nullptr, std::free)){
-      if(filename == NULL) {
+    template <typename PR>
+    PointRange(PR &pr) : PointRange(pr, Point::generate_parameters(pr)) {}
+
+    template <typename PR>
+    PointRange(PR &pr, int dims) : PointRange(pr, Point::generate_parameters(dims)) {}
+
+    PointRange(indexType num_points, indexType d, const parameters p) : n(num_points), max_cache(n), index_cache(nullptr), sid(0), eid(num_points), params(p)
+    {
+      size_t num_bytes = params.num_bytes();
+      aligned_bytes = 64 * ((num_bytes - 1) / 64 + 1);
+      if (aligned_bytes != num_bytes)
+        std::cout << "Aligning bytes to " << aligned_bytes << std::endl;
+      size_t total_bytes = n * aligned_bytes;
+      byte *ptr = (byte *)aligned_alloc(1l << 21, total_bytes);
+      madvise(ptr, total_bytes, MADV_HUGEPAGE);
+      values = std::shared_ptr<byte[]>(ptr, std::free);
+    }
+
+    PointRange(indexType num_points, indexType d) : PointRange(num_points, d, parameters(d))
+    {
+    }
+
+    PointRange(const char *filename, size_t max_cache_size = 0, byte **index_cache = nullptr) : max_cache(max_cache_size), index_cache(index_cache), values(std::shared_ptr<byte[]>(nullptr, std::free))
+    {
+      sid = 0;
+      eid = 0;
+      size_t new_eid = eid;
+      if (filename == NULL)
+      {
         n = 0;
         return;
       }
-      std::ifstream reader(filename);
-      if (!reader.is_open()) {
+      reader.open(filename, std::ios::in | std::ios::binary);
+      if (!reader.is_open())
+      {
         std::cout << "Data file " << filename << " not found" << std::endl;
         std::abort();
       }
 
-      //read num points and max degree
-      unsigned int num_points;
-      unsigned int d;
-      reader.read((char*)(&num_points), sizeof(unsigned int));
+      // read num points and max degree
+      indexType num_points;
+      indexType d;
+      reader.read((char *)(&num_points), sizeof(indexType));
       n = num_points;
-      reader.read((char*)(&d), sizeof(unsigned int));
+
+      if (max_cache == 0 || max_cache > n)
+      {
+        new_eid = n;
+      }
+      else
+      {
+        new_eid = max_cache;
+      }
+      max_cache = new_eid - sid;
+      reader.read((char *)(&d), sizeof(indexType));
       params = parameters(d);
       std::cout << "Data: detected " << num_points << " points with dimension " << d << std::endl;
-      int num_bytes = params.num_bytes();
-      aligned_bytes =  64 * ((num_bytes - 1)/64 + 1);
+
+      size_t num_bytes = params.num_bytes();
+      aligned_bytes = 64 * ((num_bytes - 1) / 64 + 1);
       if (aligned_bytes != num_bytes)
         std::cout << "Aligning bytes to " << aligned_bytes << std::endl;
-      long total_bytes = n * aligned_bytes;
-      byte* ptr = (byte*) aligned_alloc(1l << 21, total_bytes);
+      size_t total_bytes = max_cache * aligned_bytes;
+      byte *ptr = (byte *)aligned_alloc(1l << 21, total_bytes);
       madvise(ptr, total_bytes, MADV_HUGEPAGE);
       values = std::shared_ptr<byte[]>(ptr, std::free);
+
+      if (max_cache == n)
+      {
+        load2cache(sid, new_eid);
+      }
+    }
+
+    void setIndexCache(byte **index_cache)
+    {
+      this->index_cache = index_cache;
+    }
+
+    byte **getIndexCache() const
+    {
+      return this->index_cache;
+    }
+
+    indexType getMaxCache() const
+    {
+      return max_cache;
+    }
+
+    void save(const char *filename)
+    {
+      if (filename == NULL)
+      {
+        std::cout << "ERROR: save filename is nullptr!" << std::endl;
+        abort();
+      }
+      std::ofstream writer(filename);
+      indexType num_points = n;
+      indexType d = params.dims;
+      writer.write((char *)(&num_points), sizeof(indexType));
+      writer.write((char *)(&d), sizeof(indexType));
+      size_t num_bytes = params.num_bytes();
+
       size_t BLOCK_SIZE = 1000000;
       size_t index = 0;
-      while(index < n) {
-          size_t floor = index;
-          size_t ceiling = index+BLOCK_SIZE <= n ? index+BLOCK_SIZE : n;
-          long m = ceiling - floor;
-          byte* data_start = new byte[m * num_bytes];
-          reader.read((char*)(data_start), m * num_bytes);
-          parlay::parallel_for(floor, ceiling, [&] (size_t i) {
-            std::memmove(values.get() + i * aligned_bytes,
-                         data_start + (i - floor) * num_bytes,
-                         num_bytes);
-          });
-          delete[] data_start;
-          index = ceiling;
+      while (index < n)
+      {
+        size_t floor = index;
+        size_t ceiling = index + BLOCK_SIZE <= n ? index + BLOCK_SIZE : n;
+        size_t m = ceiling - floor;
+        byte *data_start = new byte[m * num_bytes];
+        parlay::parallel_for(floor, ceiling, [&](size_t i)
+                             { std::memmove(data_start + (i - floor) * num_bytes,
+                                            values.get() + i * aligned_bytes,
+                                            num_bytes); });
+        writer.write((char *)(data_start), m * num_bytes);
+
+        delete[] data_start;
+        index = ceiling;
       }
-  }
-
-  size_t size() const { return n; }
-
-  unsigned int get_dims() const { return params.dims; }
-  
-  Point operator [] (long i) const {
-    if (i > n) {
-      std::cout << "ERROR: point index out of range: " << i << " from range " << n << ", " << std::endl;
-      abort();
+      writer.close();
     }
-    return Point(values.get()+i*aligned_bytes, i, params);
-  }
 
-  byte* location(long i) const {
-    return values.get() + i * aligned_bytes;
-  }
-  
-  parameters params;
+    size_t get_max_cache() { return max_cache; }
 
-private:
-  std::shared_ptr<byte[]> values;
-  long aligned_bytes;
-  size_t n;
-};
+    template<typename idType>
+    void load2cache(idType *all_ids, size_t ids_num)
+    {
+      if (max_cache == n){
+        this->sid = 0;
+        this->eid = n;
+        return;
+      }
+      if(ids_num > max_cache){
+        std::cout<<"load2cache ERROR:max cache is "<<max_cache<<" but load num is "<<ids_num<<std::endl;
+        abort();
+      }
+      if (index_cache == nullptr)
+      {
+        std::cout << "load2cache ERROR: index_cache is empty!" << std::endl;
+        abort();
+      }
+      size_t num_bytes = params.num_bytes();
+      for (size_t i = 0; i < ids_num; ++i)
+      {
+        reader.seekg(sizeof(indexType) * 2 + all_ids[i] * num_bytes);
+        byte *to_data = values.get() + i * aligned_bytes;
+        reader.read((char *)(to_data), num_bytes);
+        index_cache[all_ids[i]] = to_data;
+      }
+    }
+
+    void load2cache(indexType sid, indexType eid)
+    {        
+      if (this->sid <= sid && this->eid >= eid)
+        return;
+      if (eid - sid > max_cache)
+      {
+        std::cout << "load2cache ERROR! eis=" << eid << " sid=" << sid << " max_cache=" << max_cache << std::endl;
+        abort();
+      }
+      this->sid = sid;
+      this->eid = eid;
+      size_t num_bytes = params.num_bytes();
+      size_t BLOCK_SIZE = 1000000;
+      size_t index = 0;
+      reader.seekg(sizeof(indexType) * 2 + sid * num_bytes);
+      auto max_cache = eid - sid;
+      while (index < max_cache)
+      {
+        size_t floor = index;
+        size_t ceiling = index + BLOCK_SIZE <= max_cache ? index + BLOCK_SIZE : max_cache;
+        size_t m = ceiling - floor;
+        byte *data_start = new byte[m * num_bytes];
+        reader.read((char *)(data_start), m * num_bytes);
+        parlay::parallel_for(floor, ceiling, [&](size_t i)
+                             { std::memmove(values.get() + i * aligned_bytes,
+                                            data_start + (i - floor) * num_bytes,
+                                            num_bytes); });
+        delete[] data_start;
+        index = ceiling;
+      }
+
+      if (index_cache != nullptr)
+      {
+        parlay::parallel_for(sid, eid, [&](size_t i)
+                             { index_cache[i] = values.get() + (i - sid) * aligned_bytes; });
+      }
+    }
+
+    ~PointRange()
+    {
+      if (reader.is_open())
+      {
+        reader.close();
+      }
+    }
+
+    void clearIndexCache(){
+      if(index_cache == nullptr || max_cache == n)
+        return;
+      sid = 0;
+      eid = 0;
+      // parlay::parallel_for(0, n, [&](size_t i){
+      //   index_cache[i] = nullptr;
+      // });
+    }
+
+    void fill2IndexCache(indexType *all_ids, indexType ids_num){
+      if(max_cache == n)
+        return;
+      if (index_cache == nullptr)
+      {
+        std::cout << "fill2IndexCache ERROR: index_cache is empty!" << std::endl;
+        abort();
+      }
+      size_t num_bytes = params.num_bytes();
+      for (size_t i = 0; i < ids_num; ++i)
+      {
+        if(index_cache[all_ids[i]] != nullptr)
+          continue;
+        reader.seekg(sizeof(indexType) * 2 + all_ids[i] * num_bytes);
+        byte *to_data = values.get() + eid * aligned_bytes;
+        reader.read((char *)(to_data), num_bytes);
+        index_cache[all_ids[i]] = to_data;
+        ++eid;
+        if(eid > max_cache){
+          std::cout<<"fill2IndexCache ERROR: index cache is full!"<<std::endl;
+          abort();
+        }
+      }      
+    }
+
+    void fill2IndexCache(indexType index, byte *from_data=nullptr){
+      if(max_cache == n)
+        return;
+      if (index_cache == nullptr)
+      {
+        std::cout << "fill2IndexCache ERROR: index_cache is empty!" << std::endl;
+        abort();
+      }
+      if(index_cache[index] != nullptr)
+        return;
+      byte *to_data = values.get() + eid * aligned_bytes;
+      size_t num_bytes = params.num_bytes();
+      if(from_data == nullptr){
+        reader.seekg(sizeof(indexType) * 2 + index * num_bytes);
+        reader.read((char *)(to_data), num_bytes);
+      } else {
+        memcpy(to_data, from_data, num_bytes);
+      }
+
+      index_cache[index] = to_data;
+      ++eid;
+      if(eid > max_cache){
+        std::cout<<"fill2IndexCache ERROR: index cache is full!"<<std::endl;
+        abort();
+      }    
+    }
+
+    size_t size() const { return n; }
+
+    indexType get_dims() const { return params.dims; }
+
+    Point operator[](size_t i) const
+    {
+      if (index_cache == nullptr || max_cache == n)
+      {
+        if (i >= eid || i < sid)
+        {
+          std::cout << "ERROR: point index out of range: " << i << " from range [" << sid << ", " << eid << ")" << std::endl;
+          abort();
+        }
+        return Point(values.get() + (i - sid) * aligned_bytes, i, params);
+      }
+      else
+      {
+        return Point(index_cache[i], i, params);
+      }
+    }
+
+    parameters params;
+
+  protected:
+    std::ifstream reader;
+    std::shared_ptr<byte[]> values;
+    size_t aligned_bytes;
+    indexType n;
+    indexType max_cache;
+    // 引用values，以支持读取非连续的向量，如Points[100],Points[67984]
+    byte **index_cache;
+
+  public:
+    // 用来缓存所有向量中的一段
+    indexType sid;
+    indexType eid;
+  };
 
 } // end namespace

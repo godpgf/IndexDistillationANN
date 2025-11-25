@@ -243,7 +243,7 @@ struct Graph{
     delete[] degrees_start;
   }
 
-  void save(char* oFile) {
+  void save(const char* oFile) {
     std::cout << "Writing graph with " << n
               << " points and max degree " << maxDeg
               << std::endl;

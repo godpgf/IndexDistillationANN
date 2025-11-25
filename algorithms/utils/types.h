@@ -45,7 +45,7 @@ struct groundTruth{
   groundTruth() : coords(parlay::make_slice<T*, T*>(nullptr, nullptr)),
                   dists(parlay::make_slice<float*, float*>(nullptr, nullptr)){}
 
-  groundTruth(char* gtFile) : coords(parlay::make_slice<T*, T*>(nullptr, nullptr)),
+  groundTruth(const char* gtFile, bool has_dist=true) : coords(parlay::make_slice<T*, T*>(nullptr, nullptr)),
                               dists(parlay::make_slice<float*, float*>(nullptr, nullptr)){
     if(gtFile == NULL){
       n = 0;
@@ -61,14 +61,16 @@ struct groundTruth{
 
       T* start_coords = (T*)(fileptr+8);
       T* end_coords = start_coords + d*num_vectors;
-
-      float* start_dists = (float*)(end_coords);
-      float* end_dists = start_dists + d*num_vectors;
+      coords = parlay::make_slice(start_coords, end_coords);
 
       n = num_vectors;
       dim = d;
-      coords = parlay::make_slice(start_coords, end_coords);
-      dists = parlay::make_slice(start_dists, end_dists);
+      
+      if(has_dist){
+        float* start_dists = (float*)(end_coords);
+        float* end_dists = start_dists + d*num_vectors;  
+        dists = parlay::make_slice(start_dists, end_dists);
+      }
     }
   }
 
@@ -162,9 +164,13 @@ struct BuildParams{
 
   double m_l = 0; // HNSW
   double init_alpha;  //vamana
+  // bool random_sp; //vamana
+
+  int sp_type = 0; // 0:fixed, 1:random, 2:current index
+  
   double alpha; //vamana and pyNNDescent
-  double init_angle;
-  double angle; // NSSG
+  double init_cos_angle;
+  double cos_angle; // NSSG
   int num_passes; //vamana
 
   long num_clusters; // HCNNG and pyNNDescent
@@ -188,11 +194,11 @@ struct BuildParams{
 
   std::string alg_type;
 
-  BuildParams(long R, long PR, long L, long gM, long lM, double a, double init_a, double angle, double init_angle, int num_passes, long nc, long cs, long mst, double de,
+  BuildParams(long R, long PR, long L, double a, double init_a, double cos_angle, double init_cos_angle, int num_passes, long nc, long cs, long mst, double de,
               bool verbose = false, int quantize = 0, double radius = 0.0, double radius_2 = 0.0,
               bool self = false, bool range = false, int single_batch = 0, long Q = 0, double trim = 0.0,
               int rerank_factor = 100)
-    : R(R), PR(PR), L(L), gM(gM), lM(lM), alpha(a), init_alpha(init_a), angle(angle), init_angle(init_angle), num_passes(num_passes), num_clusters(nc), cluster_size(cs), MST_deg(mst), delta(de),
+    : R(R), PR(PR), L(L), alpha(a), init_alpha(init_a), cos_angle(cos_angle), init_cos_angle(init_cos_angle), num_passes(num_passes), num_clusters(nc), cluster_size(cs), MST_deg(mst), delta(de),
       verbose(verbose), quantize(quantize), radius(radius), radius_2(radius_2), self(self), range(range),
       single_batch(single_batch), Q(Q), trim(trim), rerank_factor(rerank_factor) {
     if(R != 0 && L != 0 && alpha != 0){alg_type = m_l>0? "HNSW": "Vamana";}
@@ -202,12 +208,12 @@ struct BuildParams{
 
   BuildParams() {}
 
-  BuildParams(long R, long L, double a, double init_a, int num_passes, bool verbose = false)
-    : R(R), L(L), alpha(a), init_alpha(init_a), num_passes(num_passes), verbose(verbose), single_batch(0)
+  BuildParams(long R, long PR, long L, double a, double init_a, int num_passes, bool verbose = false)
+    : R(R), PR(PR), L(L), alpha(a), init_alpha(init_a), num_passes(num_passes), verbose(verbose), single_batch(0)
   {alg_type = "Vamana";}
 
-  BuildParams(long R, long L, double m_l, double a)
-    : R(R), L(L), m_l(m_l), alpha(a), verbose(false)
+  BuildParams(long R, long PR, long L, double m_l, double a, bool verbose = false)
+    : R(R), PR(PR), L(L), m_l(m_l), alpha(a), verbose(verbose)
   {alg_type = "HNSW";}
 
   BuildParams(long nc, long cs, long mst)

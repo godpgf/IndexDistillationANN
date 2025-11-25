@@ -78,6 +78,10 @@ struct AVL
         return nds[nodeId].val;
     }
 
+    size_t get_max_size(){
+        return max_size;
+    }
+
 private:
 
     template<typename F>

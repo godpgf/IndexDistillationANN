@@ -22,6 +22,8 @@
 
 #pragma once
 
+#define X86
+
 #include <algorithm>
 #include <iostream>
 #include <bitset>
@@ -31,7 +33,10 @@
 #include "parlay/internal/file_map.h"
 
 #include "types.h"
-//#include "NSGDist.h"
+
+#ifdef X86
+#include "NSGDist.h"
+#endif
 // #include "common/time_loop.h"
 
 #include <fcntl.h>
@@ -81,12 +86,15 @@ float euclidian_distance(const int8_t *p, const int8_t *q, unsigned d) {
 }
 
 float euclidian_distance(const float *p, const float *q, unsigned d) {
-  //efanna2e::DistanceL2 distfunc;
-  //return distfunc.compare(p, q, d);
+#ifdef X86
+  efanna2e::DistanceL2 distfunc;
+  return distfunc.compare(p, q, d);
+#else
   float result = 0.0;
   for (int i = 0; i < d; i++)
     result += (q[i] - p[i]) * (q[i] - p[i]);
   return (float)result;
+#endif
 }
 
 template<typename T_, long range=(1l << sizeof(T_)*8) - 1>
@@ -112,9 +120,52 @@ struct Euclidian_Point {
   static bool is_metric() {return true;}
   T operator[](long i) const {return *(values + i);}
 
+  T* data(){return values;}
+
   float distance(const Euclidian_Point& x) const {
     return euclidian_distance(this->values, x.values, params.dims);
   }
+
+  float distance(const float* pivots){
+    float dis = 0;
+    for (uint j = 0; j < params.dims; j++){
+      dis += (pivots[j] - values[j]) * (pivots[j] - values[j]);
+    }
+    return dis;
+  }
+
+  // 计算当前向量与输入轴的距离
+  void pq_distance(const float* pivots, uint* order_ids, uint times, uint chunk, float* out_dist) const{
+    auto tc = times * chunk;
+    auto td = times * params.dims;
+    for (uint j = 0; j < tc; ++j){
+      out_dist[j] = 0;
+    }
+    uint chunk_dim = params.dims / chunk;
+    for (uint j = 0; j < td; j++){
+      uint t_chunk_id = j / chunk_dim;
+      uint oj = order_ids[j];
+      out_dist[t_chunk_id] += (pivots[oj] - values[oj]) * (pivots[oj] - values[oj]);
+    }
+  }
+
+  /*template<typename chunkIndexType>
+  float pq_distance_sum(const float* pivots, uint* order_ids, uint times, uint chunk, uint sub_chunk, chunkIndexType* codes){
+    auto tc = times * chunk;
+    auto td = times * params.dims;
+    uint sub_chunk_dim = params.dims / (chunk * sub_chunk);
+    float out_dist = 0;
+    for(auto j = 0; j < tc; ++j){
+      const float* cur_pivots = pivots + codes[j] * td;
+      auto* cur_order_ids = order_ids + j * chunk_dim;
+      for(auto i = 0; i < chunk_dim; ++i){
+        uint oi = cur_order_ids[i];
+        out_dist += (cur_pivots[oi] - values[oi]) * (cur_pivots[oi] - values[oi]);
+      }
+
+    }
+    return out_dist;
+  }*/
 
   void normalize() {
     double norm = 0.0;

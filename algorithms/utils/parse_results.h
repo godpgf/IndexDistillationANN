@@ -17,10 +17,9 @@ struct Graph_ {
   int max_deg;
   double time;
   size_t isolated_cnt;
-  double avg_dis;
 
-  Graph_(std::string n, std::string p, long s, double ad, int md, double t, size_t isolated_cnt, double avg_dis)
-      : name(n), params(p), size(s), avg_deg(ad), max_deg(md), time(t), isolated_cnt(isolated_cnt), avg_dis(avg_dis) {}
+  Graph_(std::string n, std::string p, long s, double ad, int md, double t, size_t isolated_cnt)
+      : name(n), params(p), size(s), avg_deg(ad), max_deg(md), time(t), isolated_cnt(isolated_cnt) {}
 
   void print() {
     std::cout << name << " graph built with " << size
@@ -28,7 +27,6 @@ struct Graph_ {
     std::cout << "Graph has average degree " << avg_deg
               << " and maximum degree " << max_deg << std::endl;
     std::cout << "Isolated nodes num is " << isolated_cnt << std::endl;
-    std::cout << "Avg Dis is " << avg_dis << std::endl;
     std::cout << "Graph built in " << time << " seconds" << std::endl;
   }
 };

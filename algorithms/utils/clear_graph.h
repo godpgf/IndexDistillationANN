@@ -281,7 +281,7 @@ std::pair<std::pair<parlay::sequence<std::pair<PathElement<indexType>, typename 
                     parlay::sequence<std::pair<PathElement<indexType>, typename Point::distanceType>>>, indexType>
 beam_search_path(const Point p, const Graph<indexType> &G, const PointRange &Points,
             const indexType starting_point, const QueryParams &QP) {
-  parlay::sequence<indexType> start_points = {starting_point};
+  std::vector<indexType> start_points = {starting_point};
   return beam_search_path(p, G, Points, start_points, QP);
 }
 
@@ -292,7 +292,7 @@ parlay::sequence<parlay::sequence<PathElement<indexType>>>
 searchAll_path(PointRange& Query_Points,
           Graph<indexType> &G, PointRange &Base_Points, stats<indexType> &QueryStats,
           indexType starting_point, QueryParams &QP) {
-  parlay::sequence<indexType> start_points = {starting_point};
+  std::vector<indexType> start_points = {starting_point};
   return searchAll_path<PointRange, indexType>(Query_Points, G, Base_Points, QueryStats, start_points, QP);
 }
 
