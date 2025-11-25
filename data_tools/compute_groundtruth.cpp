@@ -101,9 +101,9 @@ int main(int argc, char* argv[]) {
   "[-base_path <b>] [-query_path <q>] "
       "[-data_type <d>] [-k <k> ] [-dist_func <d>] [-gt_path <outfile>]");
 
-  char* gFile = P.getOptionValue("-gt_path");
-  char* qFile = P.getOptionValue("-query_path");
-  char* bFile = P.getOptionValue("-base_path");
+  const char* gFile = P.getOptionValue("-gt_path");
+  const char* qFile = P.getOptionValue("-query_path");
+  const char* bFile = P.getOptionValue("-base_path");
   char* vectype = P.getOptionValue("-data_type");
   char* dfc = P.getOptionValue("-dist_func");
   int k = P.getOptionIntValue("-k", 100);
