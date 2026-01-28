@@ -241,6 +241,9 @@ struct QueryParams{
   int rerank_factor = 100;
   float pad = 1.0;
 
+  int limit_bin_size = 0;
+  int cur_bin = 1;
+
   QueryParams(long k, long Q, double cut, long limit, long dg, double rerank_factor = 100) : k(k), beamSize(Q), cut(cut), limit(limit), degree_limit(dg), rerank_factor(rerank_factor) {}
 
   QueryParams() {}

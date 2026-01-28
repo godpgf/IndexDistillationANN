@@ -142,6 +142,14 @@ To build a Vamana graph on Sift1M and save it to memory, use the following comma
 ./neighbors -alg_type nssg -R 50 -L 70 -alpha 0 -cos_angle 0.5756 -graph_outfile ../../data/sift/graph/sift_base.nssg -data_type uint8 -dist_func Euclidian -delta 0.05 -base_path ../../data/sift/sift_base.u8bin -query_path ../../data/sift/sift_query.u8bin -gt_path ../../data/sift/sift-1M -res_path ../../data/sift/res/nssg.csv -graph_path ../../data/sift/graph/sift_base.nnDescent -sp_type 2 -rebuild
 ```
 
+#### SAG：Sparse and Accessible Graph（Ours）
+
+To achieve the search performance of NSG and reduce the time required for building graph indices, we designed SAG based on the Vamana code. SAG involves two graph - construction operations: First, it builds a sparse graph and searches for neighbors for each node on this sparse graph to enhance the connectivity of nodes in all directions. Second, it utilizes the sparse graph with good connectivity to further search for neighbors, thereby improving the accuracy of neighbors (nodes that are closer in distance should be more likely to be neighbors).
+
+```bash
+./neighbors -alg_type vamana -R 50 -L 70 -alpha 1.1 -graph_outfile ../../data/sift/graph/sift_base.sag -data_type uint8 -dist_func Euclidian -delta 0.05 -base_path ../../data/sift/sift_base.u8bin -query_path ../../data/sift/sift_query.u8bin -gt_path ../../data/sift/sift-1M -res_path ../../data/sift/res/sag.csv -num_passes 2
+```
+
 ####  Multi-Start（Ours）
 
 Return to the root directory and compile our method according to the following script.

@@ -142,6 +142,9 @@ filtered_beam_search(const GT &G,
     filtered.clear();
     long num_elts = std::min<long>(G[current.first].size(), QP.degree_limit);
     for (indexType i=0; i<num_elts; i++) {
+      if(QP.limit_bin_size > 0 && i % QP.limit_bin_size != QP.cur_bin){
+          continue;
+      }
       auto a = G[current.first][i];
       auto aid = f_map(a);
       if (has_been_seen(a) || Points[aid].same_as(p)) continue;  // skip if already seen

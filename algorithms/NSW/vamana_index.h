@@ -115,12 +115,15 @@ struct knn_index {
     // last pass uses alpha
     std::cout << "number of passes = " << BP.num_passes << std::endl;
     for (int i=0; i < BP.num_passes; i++) {
-      if (i == BP.num_passes - 1)
-        batch_insert(inserts, G, Points, QPoints, BuildStats, BP.alpha, BP.cos_angle, true, 2, .02);
-      else
-        batch_insert(inserts, G, Points, QPoints, BuildStats, BP.init_alpha, BP.init_cos_angle, true, 2, .02);
+      if (i == BP.num_passes - 1){
+        uint32_t limit_bin_size = 0;
+        batch_insert(inserts, G, Points, QPoints, BuildStats, BP.alpha, BP.cos_angle, true, limit_bin_size, 2, .02);
+      }
+      else{
+        uint32_t limit_bin_size = 2;
+        batch_insert(inserts, G, Points, QPoints, BuildStats, BP.init_alpha, BP.init_cos_angle, true, limit_bin_size, 2, .02);
+      }
     }
-
 
   }
 
@@ -128,7 +131,7 @@ struct knn_index {
   void batch_insert(parlay::sequence<indexType> &inserts,
                     GraphI &G, PR &Points, QPR &QPoints,
                     stats<indexType> &BuildStats, double alpha, double cos_angle,
-                    bool random_order = false, double base = 2,
+                    bool random_order = false, uint32_t limit_bin_size = 0, double base = 2,
                     double max_fraction = .02, bool print=true) {
     for(int p : inserts){
       if(p < 0 || p > (int) G.size()){
@@ -202,6 +205,13 @@ struct knn_index {
         }
 
         QueryParams QP((long) 0, BP.L, (double) 0.0, (long) Points.size(), (long) G.max_degree());
+
+        if (limit_bin_size > 0)
+        {
+            QP.limit_bin_size = limit_bin_size;
+            QP.cur_bin = index % QP.limit_bin_size;
+        }
+
         auto [visited, bs_distance_comps] =
           //beam_search<Point, PointRange, indexType>(Points[index], G, Points, sp, QP);
           beam_search_rerank__<Point, QPoint, PR, QPR, indexType>(Points[index],
